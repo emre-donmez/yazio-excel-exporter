@@ -22,7 +22,7 @@ The generated Excel file contains two sheets:
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/yazio-excel-exporter.git
+git clone https://github.com/emre-donmez/yazio-excel-exporter.git
 cd yazio-excel-exporter
 pip install -r requirements.txt
 ```
