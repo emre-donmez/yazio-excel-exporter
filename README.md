@@ -29,6 +29,16 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Standalone Exe (No Python Required)
+
+Download `yazio-exporter.exe` from [Releases](https://github.com/emre-donmez/yazio-excel-exporter/releases) and double-click to run. The app will prompt for:
+
+1. Your Yazio email
+2. Your Yazio password
+3. Date range selection (week / month / year / all)
+
+The Excel file will be saved in the same folder as the exe.
+
 ### With command-line arguments
 
 ```bash

@@ -45,19 +45,29 @@ def main():
     # Step 2: Determine date range
     all_nutrients = None
     today = date.today()
+    range_choice = args.range
+
+    if not args.from_date and not args.to_date and not range_choice:
+        print("\nSelect date range:")
+        print("  1) Last week")
+        print("  2) Last month")
+        print("  3) Last year")
+        print("  4) All data (auto-discover)")
+        choice = input("Choice [4]: ").strip()
+        range_choice = {"1": "week", "2": "month", "3": "year"}.get(choice, "all")
 
     if args.from_date and args.to_date:
         start_date, end_date = args.from_date, args.to_date
         print(f"Using provided date range: {start_date} to {end_date}")
-    elif args.range and args.range != "all":
+    elif range_choice and range_choice != "all":
         end_date = today
-        if args.range == "week":
+        if range_choice == "week":
             start_date = today - timedelta(days=7)
-        elif args.range == "month":
+        elif range_choice == "month":
             start_date = today - timedelta(days=30)
-        elif args.range == "year":
+        elif range_choice == "year":
             start_date = today - timedelta(days=365)
-        print(f"Using range '{args.range}': {start_date} to {end_date}")
+        print(f"Using range '{range_choice}': {start_date} to {end_date}")
     else:
         print("Auto-discovering date range...")
         start_date, end_date, all_nutrients = discover_date_range(session)
