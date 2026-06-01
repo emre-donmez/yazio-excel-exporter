@@ -1,4 +1,5 @@
 from datetime import datetime, date
+from typing import Optional
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -84,15 +85,31 @@ def _sort_detail_rows_by_date_desc_and_meal(rows: list[dict]):
     )
 
 
-def export_to_excel(summary_rows: list[dict], detail_rows: list[dict], output_path: str):
-    """Export data to Excel file with Summary and Details sheets."""
+def _sort_weight_rows_by_date_desc(rows: list[dict]):
+    """Sort Weight Change rows by date from newest to oldest."""
+    return sorted(
+        rows,
+        key=_date_sort_key,
+        reverse=True
+    )
+
+
+def export_to_excel(
+    summary_rows: list[dict],
+    detail_rows: list[dict],
+    output_path: str,
+    weight_change_rows: Optional[list[dict]] = None
+):
+    """Export data to Excel file with Summary, Details, and Weight Change sheets."""
     wb = Workbook()
 
     summary_rows = _sort_summary_rows_by_date_desc(summary_rows)
     detail_rows = _sort_detail_rows_by_date_desc_and_meal(detail_rows)
+    weight_change_rows = _sort_weight_rows_by_date_desc(weight_change_rows or [])
 
     _create_summary_sheet(wb, summary_rows)
     _create_detail_sheet(wb, detail_rows)
+    _create_weight_change_sheet(wb, weight_change_rows)
 
     wb.save(output_path)
     print(f"Excel file saved to: {output_path}")
@@ -295,4 +312,83 @@ def _create_detail_sheet(wb: Workbook, rows: list[dict]):
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 3, 50)
 
     # Freeze top row
+    ws.freeze_panes = "A2"
+
+
+def _create_weight_change_sheet(wb: Workbook, rows: list[dict]):
+    ws = wb.create_sheet("Weight Change")
+
+    headers = [
+        "Date",
+        "Weight (kg)",
+        "Change (kg)",
+        "Total Change (kg)"
+    ]
+
+    fields = [
+        "date",
+        "weight",
+        "change",
+        "total_change"
+    ]
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="C65911", end_color="C65911", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    for row_idx, row_data in enumerate(rows, 2):
+        for col_idx, field in enumerate(fields, 1):
+            val = row_data.get(field, "")
+
+            if field == "date":
+                val = _to_excel_date(val)
+
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+
+            if field == "date":
+                cell.number_format = EXCEL_DATE_FORMAT
+                cell.alignment = Alignment(horizontal="center")
+            elif field == "weight":
+                cell.number_format = '#,##0.0'
+                cell.alignment = Alignment(horizontal="right")
+            else:
+                cell.number_format = '+#,##0.0;-#,##0.0;0.0'
+                cell.alignment = Alignment(horizontal="right")
+
+    light_fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+
+    for row_idx in range(2, len(rows) + 2):
+        if row_idx % 2 == 0:
+            for col_idx in range(1, len(headers) + 1):
+                ws.cell(row=row_idx, column=col_idx).fill = light_fill
+
+    for col_idx in range(1, len(headers) + 1):
+        max_len = len(headers[col_idx - 1])
+
+        for row_idx in range(2, len(rows) + 2):
+            val = ws.cell(row=row_idx, column=col_idx).value
+
+            if isinstance(val, date):
+                val = val.strftime("%d.%m.%Y")
+
+            val = str(val or "")
+            max_len = max(max_len, len(val))
+
+        ws.column_dimensions[get_column_letter(col_idx)].width = max_len + 3
+
     ws.freeze_panes = "A2"

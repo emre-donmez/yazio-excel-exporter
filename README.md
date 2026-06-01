@@ -5,19 +5,21 @@ Export your [Yazio](https://www.yazio.com/) food diary to an Excel file. Automat
 ## Features
 
 - **Auto-discovery** — scans your account to find all days with data (no need to specify dates)
-- **Summary sheet** — daily totals: calories, protein, carbs, fat, calorie goal, and goal difference
+- **Summary sheet** — daily totals: calories, protein, carbs, fat, fiber, calorie goal, and goal difference
 - **Details sheet** — every logged food item with meal type, nutritional breakdown, and AI-generated flag
+- **Weight Change sheet** — body weight history with per-entry and total kilogram changes
 - **AI-generated items** — correctly extracts names and nutrients for Yazio's AI-logged simple products
 - **Formatted output** — styled headers, alternating row colors, auto-fitted columns, frozen header rows
 
 ## Output
 
-The generated Excel file contains two sheets:
+The generated Excel file contains three sheets:
 
 | Sheet | Columns |
 |-------|---------|
-| **Summary** | Date, Calories, Protein, Carbs, Fat, Calorie Goal, Goal - Calories |
+| **Summary** | Date, Calories, Protein, Carbs, Fat, Fiber, Calorie Goal, Goal - Calories |
 | **Details** | Date, Meal, Food Name, Producer, Amount, Calories, Protein, Carbs, Fat, Fiber, AI Generated |
+| **Weight Change** | Date, Weight, Change, Total Change |
 
 ## Installation
 
@@ -35,7 +37,7 @@ Download `yazio-exporter.exe` from [Releases](https://github.com/emre-donmez/yaz
 
 1. Your Yazio email
 2. Your Yazio password
-3. Date range selection (week / month / year / all)
+3. Date range selection (week / month / 3 months / year / all)
 
 The Excel file will be saved in the same folder as the exe.
 
@@ -50,6 +52,7 @@ python main.py --email your@email.com --password yourpassword
 ```bash
 python main.py --range week      # Last 7 days
 python main.py --range month     # Last 30 days
+python main.py --range 3months   # Last 90 days
 python main.py --range year      # Last 365 days
 python main.py --range all       # Auto-discover all data (default)
 ```
@@ -68,7 +71,7 @@ python main.py
 |------|-------------|---------|
 | `--email` | Yazio account email | `YAZIO_EMAIL` env var |
 | `--password` | Yazio account password | `YAZIO_PASSWORD` env var |
-| `--range` | Predefined range: `week`, `month`, `year`, `all` | Auto-discover |
+| `--range` | Predefined range: `week`, `month`, `3months`, `year`, `all` | Auto-discover |
 | `--from-date` | Custom start date (YYYY-MM-DD) | — |
 | `--to-date` | Custom end date (YYYY-MM-DD) | — |
 | `--output` | Output file path | `yazio_export.xlsx` |

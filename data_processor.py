@@ -117,3 +117,35 @@ def calculate_daily_fiber(detail_rows: list[dict]) -> dict[str, float]:
         if date:
             fiber_by_date[date] = fiber_by_date.get(date, 0.0) + fiber
     return fiber_by_date
+
+
+def build_weight_change_rows(weight_by_date: dict[str, float]) -> list[dict]:
+    """Build rows for weight changes, keeping only changed weight values."""
+    rows = []
+    first_weight = None
+    previous_weight = None
+
+    for day_str, raw_weight in sorted(weight_by_date.items()):
+        weight = round(_safe_float(raw_weight), 1)
+
+        if previous_weight is not None and weight == previous_weight:
+            continue
+
+        if first_weight is None:
+            first_weight = weight
+            change = 0.0
+            total_change = 0.0
+        else:
+            change = round(weight - previous_weight, 1)
+            total_change = round(weight - first_weight, 1)
+
+        rows.append({
+            "date": day_str,
+            "weight": weight,
+            "change": change,
+            "total_change": total_change,
+        })
+
+        previous_weight = weight
+
+    return rows

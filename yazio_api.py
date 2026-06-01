@@ -1,6 +1,7 @@
 import requests
-from datetime import date
+from datetime import date, timedelta
 import calendar
+from typing import Callable, Optional
 
 BASE_URL = "https://yzapi.yazio.com"
 CLIENT_ID = "1_4hiybetvfksgw40o0sog4s884kwc840wwso8go4k8c04goo4c"
@@ -75,6 +76,57 @@ def get_product(session: YazioSession, product_id: str) -> dict:
     )
     resp.raise_for_status()
     return resp.json()
+
+
+def get_weight_for_date(session: YazioSession, day: date) -> Optional[float]:
+    """Get the latest recorded body weight for a specific date."""
+    resp = session.get(
+        f"{BASE_URL}/v15/user/bodyvalues/weight/last",
+        params={"date": day.isoformat()},
+    )
+
+    if resp.status_code in (204, 404):
+        return None
+
+    resp.raise_for_status()
+    data = resp.json()
+
+    if not isinstance(data, dict) or "value" not in data:
+        return None
+
+    value = data.get("value")
+    if value is None:
+        return None
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_weight_by_date(
+    session: YazioSession,
+    start: date,
+    end: date,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> dict[str, float]:
+    """Get body weight values for each day in the date range."""
+    weights = {}
+    current = start
+    total_days = (end - start).days + 1
+    completed_days = 0
+
+    while current <= end:
+        weight = get_weight_for_date(session, current)
+        if weight is not None:
+            weights[current.isoformat()] = weight
+        current += timedelta(days=1)
+        completed_days += 1
+
+        if progress_callback:
+            progress_callback(completed_days, total_days)
+
+    return weights
 
 
 def discover_date_range(session: YazioSession) -> tuple[date, date, list[dict]]:

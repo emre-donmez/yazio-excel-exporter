@@ -4,8 +4,21 @@ import sys
 from datetime import date, timedelta
 from dotenv import load_dotenv
 
-from yazio_api import login, YazioSession, discover_date_range, get_nutrients_daily, get_consumed_items, get_product
-from data_processor import build_summary_rows, build_detail_rows, calculate_daily_fiber
+from yazio_api import (
+    login,
+    YazioSession,
+    discover_date_range,
+    get_nutrients_daily,
+    get_consumed_items,
+    get_product,
+    get_weight_by_date,
+)
+from data_processor import (
+    build_summary_rows,
+    build_detail_rows,
+    calculate_daily_fiber,
+    build_weight_change_rows,
+)
 from excel_exporter import export_to_excel
 
 
@@ -17,8 +30,8 @@ def main():
     parser.add_argument("--password", default=os.getenv("YAZIO_PASSWORD"), help="Yazio password (or set YAZIO_PASSWORD env var)")
     parser.add_argument("--from-date", type=date.fromisoformat, default=None, help="Start date (YYYY-MM-DD)")
     parser.add_argument("--to-date", type=date.fromisoformat, default=None, help="End date (YYYY-MM-DD)")
-    parser.add_argument("--range", choices=["week", "month", "year", "all"], default=None,
-                        help="Predefined date range: week, month, year, or all (auto-discover)")
+    parser.add_argument("--range", choices=["week", "month", "3months", "year", "all"], default=None,
+                        help="Predefined date range: week, month, 3months, year, or all (auto-discover)")
     parser.add_argument("--output", default="yazio_export.xlsx", help="Output Excel file path")
     args = parser.parse_args()
 
@@ -51,10 +64,16 @@ def main():
         print("\nSelect date range:")
         print("  1) Last week")
         print("  2) Last month")
-        print("  3) Last year")
-        print("  4) All data (auto-discover)")
-        choice = input("Choice [4]: ").strip()
-        range_choice = {"1": "week", "2": "month", "3": "year"}.get(choice, "all")
+        print("  3) Last 3 months")
+        print("  4) Last year")
+        print("  5) All data (auto-discover)")
+        choice = input("Choice [5]: ").strip()
+        range_choice = {
+            "1": "week",
+            "2": "month",
+            "3": "3months",
+            "4": "year",
+        }.get(choice, "all")
 
     if args.from_date and args.to_date:
         start_date, end_date = args.from_date, args.to_date
@@ -65,6 +84,8 @@ def main():
             start_date = today - timedelta(days=7)
         elif range_choice == "month":
             start_date = today - timedelta(days=30)
+        elif range_choice == "3months":
+            start_date = today - timedelta(days=90)
         elif range_choice == "year":
             start_date = today - timedelta(days=365)
         print(f"Using range '{range_choice}': {start_date} to {end_date}")
@@ -117,7 +138,23 @@ def main():
         print(f"\r  Progress: {progress:.0f}% ({i + 1}/{len(all_product_ids)})", end="", flush=True)
     print(f"\n  Fetched {len(products_cache)} product details")
 
-    # Step 6: Build data rows for Excel
+    # Step 6: Fetch weight values for the selected date range
+    print("Fetching weight changes...")
+    try:
+        def print_weight_progress(current: int, total: int):
+            progress = current / total * 100
+            print(f"\r  Progress: {progress:.0f}% ({current}/{total})", end="", flush=True)
+
+        weight_by_date = get_weight_by_date(session, start_date, end_date, print_weight_progress)
+        print()
+        weight_change_rows = build_weight_change_rows(weight_by_date)
+        print(f"  Found {len(weight_change_rows)} weight changes")
+    except Exception as e:
+        print()
+        print(f"  Warning: Failed to fetch weight changes: {e}")
+        weight_change_rows = []
+
+    # Step 7: Build data rows for Excel
     print("Building data rows for Excel...")
     detail_rows = build_detail_rows(consumed_by_date, products_cache)
     summary_rows = build_summary_rows(all_nutrients)
@@ -127,11 +164,14 @@ def main():
     for row in summary_rows:
         row["fiber"] = daily_fiber.get(row["date"], 0.0)
 
-    # Step 7: Export to Excel
+    # Step 8: Export to Excel
     print(f"Exporting data to {args.output}...")
-    export_to_excel(summary_rows, detail_rows, args.output)
+    export_to_excel(summary_rows, detail_rows, args.output, weight_change_rows)
 
-    print(f"\nDone! {len(summary_rows)} days summarized, {len(detail_rows)} items detailed.")
+    print(
+        f"\nDone! {len(summary_rows)} days summarized, "
+        f"{len(detail_rows)} items detailed, {len(weight_change_rows)} weight changes."
+    )
     print(f"Output: {args.output}")
 
 
