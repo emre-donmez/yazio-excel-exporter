@@ -1,11 +1,95 @@
+from datetime import datetime, date
+
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+
+
+EXCEL_DATE_FORMAT = "dd.mm.yyyy"
+
+MEAL_ORDER = {
+    "breakfast": 0,
+    "lunch": 1,
+    "dinner": 2,
+    "snack": 3
+}
+
+
+def _to_excel_date(value):
+    """Convert ISO date string like 2026-05-18 to real Excel date."""
+    if not value:
+        return ""
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return value
+
+    return value
+
+
+def _date_sort_key(row: dict):
+    """Return a safe date value for sorting."""
+    value = _to_excel_date(row.get("date", ""))
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    if isinstance(value, date):
+        return value
+
+    return date.min
+
+
+def _meal_sort_key(row: dict):
+    """Return meal order for Details sheet sorting."""
+    meal = row.get("meal", "")
+
+    if not meal:
+        return 99
+
+    meal = str(meal).strip().lower()
+    return MEAL_ORDER.get(meal, 99)
+
+
+def _sort_summary_rows_by_date_desc(rows: list[dict]):
+    """Sort Summary rows by date from newest to oldest."""
+    return sorted(
+        rows,
+        key=_date_sort_key,
+        reverse=True
+    )
+
+
+def _sort_detail_rows_by_date_desc_and_meal(rows: list[dict]):
+    """
+    Sort Details rows by:
+    1. Date from newest to oldest
+    2. Meal order inside the same day:
+       Breakfast -> Lunch -> Dinner -> Snack
+    """
+    return sorted(
+        rows,
+        key=lambda row: (
+            -_date_sort_key(row).toordinal(),
+            _meal_sort_key(row)
+        )
+    )
 
 
 def export_to_excel(summary_rows: list[dict], detail_rows: list[dict], output_path: str):
     """Export data to Excel file with Summary and Details sheets."""
     wb = Workbook()
+
+    summary_rows = _sort_summary_rows_by_date_desc(summary_rows)
+    detail_rows = _sort_detail_rows_by_date_desc_and_meal(detail_rows)
 
     _create_summary_sheet(wb, summary_rows)
     _create_detail_sheet(wb, detail_rows)
@@ -18,13 +102,33 @@ def _create_summary_sheet(wb: Workbook, rows: list[dict]):
     ws = wb.active
     ws.title = "Summary"
 
-    headers = ["Date", "Calories (kcal)", "Protein (g)", "Carbs (g)", "Fat (g)", "Calorie Goal", "Goal - Calories"]
-    fields = ["date", "calories", "protein", "carbs", "fat", "calorie_goal", "goal_minus_calories"]
+    headers = [
+        "Date",
+        "Calories (kcal)",
+        "Protein (g)",
+        "Carbs (g)",
+        "Fat (g)",
+        "Fiber (g)",
+        "Calorie Goal",
+        "Goal - Calories"
+    ]
+
+    fields = [
+        "date",
+        "calories",
+        "protein",
+        "carbs",
+        "fat",
+        "fiber",
+        "calorie_goal",
+        "goal_minus_calories"
+    ]
 
     # Style
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     header_alignment = Alignment(horizontal="center", vertical="center")
+
     thin_border = Border(
         left=Side(style="thin"),
         right=Side(style="thin"),
@@ -44,9 +148,15 @@ def _create_summary_sheet(wb: Workbook, rows: list[dict]):
     for row_idx, row_data in enumerate(rows, 2):
         for col_idx, field in enumerate(fields, 1):
             val = row_data.get(field, "")
+
+            if field == "date":
+                val = _to_excel_date(val)
+
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
             cell.border = thin_border
-            if col_idx == 1:
+
+            if field == "date":
+                cell.number_format = EXCEL_DATE_FORMAT
                 cell.alignment = Alignment(horizontal="center")
             else:
                 cell.number_format = '#,##0.0'
@@ -54,6 +164,7 @@ def _create_summary_sheet(wb: Workbook, rows: list[dict]):
 
     # Alternating row colors
     light_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+
     for row_idx in range(2, len(rows) + 2):
         if row_idx % 2 == 0:
             for col_idx in range(1, len(headers) + 1):
@@ -62,9 +173,16 @@ def _create_summary_sheet(wb: Workbook, rows: list[dict]):
     # Auto-fit column widths
     for col_idx in range(1, len(headers) + 1):
         max_len = len(headers[col_idx - 1])
+
         for row_idx in range(2, len(rows) + 2):
-            val = str(ws.cell(row=row_idx, column=col_idx).value or "")
+            val = ws.cell(row=row_idx, column=col_idx).value
+
+            if isinstance(val, date):
+                val = val.strftime("%d.%m.%Y")
+
+            val = str(val or "")
             max_len = max(max_len, len(val))
+
         ws.column_dimensions[get_column_letter(col_idx)].width = max_len + 3
 
     # Freeze top row
@@ -74,13 +192,39 @@ def _create_summary_sheet(wb: Workbook, rows: list[dict]):
 def _create_detail_sheet(wb: Workbook, rows: list[dict]):
     ws = wb.create_sheet("Details")
 
-    headers = ["Date", "Meal", "Food Name", "Producer", "Amount (g)", "Calories (kcal)", "Protein (g)", "Carbs (g)", "Fat (g)", "Fiber (g)", "AI Generated"]
-    fields = ["date", "meal", "food_name", "producer", "amount", "calories", "protein", "carbs", "fat", "fiber", "ai_generated"]
+    headers = [
+        "Date",
+        "Meal",
+        "Food Name",
+        "Producer",
+        "Amount (g)",
+        "Calories (kcal)",
+        "Protein (g)",
+        "Carbs (g)",
+        "Fat (g)",
+        "Fiber (g)",
+        "AI Generated"
+    ]
+
+    fields = [
+        "date",
+        "meal",
+        "food_name",
+        "producer",
+        "amount",
+        "calories",
+        "protein",
+        "carbs",
+        "fat",
+        "fiber",
+        "ai_generated"
+    ]
 
     # Style
     header_font = Font(bold=True, color="FFFFFF", size=11)
     header_fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
     header_alignment = Alignment(horizontal="center", vertical="center")
+
     thin_border = Border(
         left=Side(style="thin"),
         right=Side(style="thin"),
@@ -100,22 +244,36 @@ def _create_detail_sheet(wb: Workbook, rows: list[dict]):
     for row_idx, row_data in enumerate(rows, 2):
         for col_idx, field in enumerate(fields, 1):
             val = row_data.get(field, "")
+
+            if field == "date":
+                val = _to_excel_date(val)
+
             if field == "ai_generated":
                 val = "Yes" if val else "No"
+
             cell = ws.cell(row=row_idx, column=col_idx, value=val)
             cell.border = thin_border
-            if field in ("calories", "protein", "carbs", "fat", "fiber", "amount"):
+
+            if field == "date":
+                cell.number_format = EXCEL_DATE_FORMAT
+                cell.alignment = Alignment(horizontal="center")
+
+            elif field in ("calories", "protein", "carbs", "fat", "fiber", "amount"):
                 cell.number_format = '#,##0.0'
                 cell.alignment = Alignment(horizontal="right")
+
             elif field == "ai_generated":
                 cell.alignment = Alignment(horizontal="center")
+
                 if val == "Yes":
                     cell.font = Font(color="FF0000")
+
             else:
                 cell.alignment = Alignment(horizontal="left")
 
     # Alternating row colors
     light_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+
     for row_idx in range(2, len(rows) + 2):
         if row_idx % 2 == 0:
             for col_idx in range(1, len(headers) + 1):
@@ -124,9 +282,16 @@ def _create_detail_sheet(wb: Workbook, rows: list[dict]):
     # Auto-fit column widths
     for col_idx in range(1, len(headers) + 1):
         max_len = len(headers[col_idx - 1])
-        for row_idx in range(2, min(len(rows) + 2, 100)):  # Sample first 100 rows
-            val = str(ws.cell(row=row_idx, column=col_idx).value or "")
+
+        for row_idx in range(2, min(len(rows) + 2, 100)):
+            val = ws.cell(row=row_idx, column=col_idx).value
+
+            if isinstance(val, date):
+                val = val.strftime("%d.%m.%Y")
+
+            val = str(val or "")
             max_len = max(max_len, len(val))
+
         ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 3, 50)
 
     # Freeze top row

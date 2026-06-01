@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from dotenv import load_dotenv
 
 from yazio_api import login, YazioSession, discover_date_range, get_nutrients_daily, get_consumed_items, get_product
-from data_processor import build_summary_rows, build_detail_rows
+from data_processor import build_summary_rows, build_detail_rows, calculate_daily_fiber
 from excel_exporter import export_to_excel
 
 
@@ -117,13 +117,18 @@ def main():
         print(f"\r  Progress: {progress:.0f}% ({i + 1}/{len(all_product_ids)})", end="", flush=True)
     print(f"\n  Fetched {len(products_cache)} product details")
 
-    # Step 6: Build data
-    print("Processing data...")
-    summary_rows = build_summary_rows(all_nutrients)
+    # Step 6: Build data rows for Excel
+    print("Building data rows for Excel...")
     detail_rows = build_detail_rows(consumed_by_date, products_cache)
+    summary_rows = build_summary_rows(all_nutrients)
+
+    # Add calculated fiber to summary rows
+    daily_fiber = calculate_daily_fiber(detail_rows)
+    for row in summary_rows:
+        row["fiber"] = daily_fiber.get(row["date"], 0.0)
 
     # Step 7: Export to Excel
-    print("Exporting to Excel...")
+    print(f"Exporting data to {args.output}...")
     export_to_excel(summary_rows, detail_rows, args.output)
 
     print(f"\nDone! {len(summary_rows)} days summarized, {len(detail_rows)} items detailed.")

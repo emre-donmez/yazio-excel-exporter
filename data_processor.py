@@ -106,3 +106,14 @@ def _is_ai_generated(item: dict, product: dict) -> bool:
         if obj.get("source") == "ai":
             return True
     return False
+
+
+def calculate_daily_fiber(detail_rows: list[dict]) -> dict[str, float]:
+    """Calculate total fiber per day from detail rows."""
+    fiber_by_date = {}
+    for row in detail_rows:
+        date = row.get("date")
+        fiber = _safe_float(row.get("fiber", 0.0))
+        if date:
+            fiber_by_date[date] = fiber_by_date.get(date, 0.0) + fiber
+    return fiber_by_date
