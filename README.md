@@ -76,6 +76,22 @@ python main.py
 | `--to-date` | Custom end date (YYYY-MM-DD) | — |
 | `--output` | Output file path | `yazio_export.xlsx` |
 
+## Building a Standalone Exe
+
+Install the development dependency once:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Build the Windows executable:
+
+```powershell
+.\scripts\build_release.ps1
+```
+
+The script writes `release/yazio-exporter.exe`, runs a `--help` smoke test, and prints the SHA256 hash for GitHub Releases.
+
 ## Project Structure
 
 ```
@@ -83,7 +99,10 @@ python main.py
 ├── yazio_api.py         # Yazio API client — auth, endpoints, date range discovery
 ├── data_processor.py    # Transforms API responses into summary/detail rows
 ├── excel_exporter.py    # Generates formatted Excel workbook
+├── scripts/
+│   └── build_release.ps1
 ├── requirements.txt
+├── requirements-dev.txt
 ├── .env.example
 └── .gitignore
 ```
